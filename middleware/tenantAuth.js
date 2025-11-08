@@ -1,11 +1,8 @@
 const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
+const { getTenantModels } = require("../models/tenant");
 
-// Get Admin model
-const getAdmin = () => mongoose.model("Admin", require("../models/Admin"));
-
-// Protect routes - require authentication
-const protect = async (req, res, next) => {
+// Protect tenant routes - require authentication
+const protectTenant = async (req, res, next) => {
   try {
     let token;
 
@@ -29,19 +26,27 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Get admin from token
-      const Admin = getAdmin();
-      const admin = await Admin.findById(decoded.id).select("+password");
-
-      if (!admin) {
+      // Check if token contains subdomain and matches current subdomain
+      if (!decoded.subdomain || decoded.subdomain !== req.params.subdomain) {
         return res.status(401).json({
           success: false,
-          message: "Token is valid but admin no longer exists",
+          message: "Invalid token for this organization",
         });
       }
 
-      // Check if admin account is locked
-      if (admin.isLocked) {
+      // Get user from tenant database
+      const { User } = getTenantModels(req.params.subdomain);
+      const user = await User.findById(decoded.id).select("+password");
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Token is valid but user no longer exists",
+        });
+      }
+
+      // Check if user account is locked
+      if (user.isLocked) {
         return res.status(423).json({
           success: false,
           message:
@@ -49,15 +54,16 @@ const protect = async (req, res, next) => {
         });
       }
 
-      // Check if admin is active
-      if (!admin.isActive) {
+      // Check if user is active
+      if (user.status !== "active") {
         return res.status(401).json({
           success: false,
           message: "Account is not active",
         });
       }
 
-      req.user = admin;
+      req.user = user;
+      req.subdomain = req.params.subdomain;
       next();
     } catch (error) {
       return res.status(401).json({
@@ -66,7 +72,7 @@ const protect = async (req, res, next) => {
       });
     }
   } catch (error) {
-    console.error("Auth middleware error:", error);
+    console.error("Tenant auth middleware error:", error);
     return res.status(500).json({
       success: false,
       message: "Server error in authentication",
@@ -74,8 +80,8 @@ const protect = async (req, res, next) => {
   }
 };
 
-// Grant access to specific roles
-const authorize = (...roles) => {
+// Grant access to specific roles for tenant users
+const authorizeTenant = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -95,8 +101,8 @@ const authorize = (...roles) => {
   };
 };
 
-// Check if user has specific permission
-const hasPermission = (permission) => {
+// Check if tenant user has specific permission
+const hasTenantPermission = (permission) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -116,28 +122,8 @@ const hasPermission = (permission) => {
   };
 };
 
-// Check if admin has super admin privileges
-const requireSuperAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: "Access denied. Please log in.",
-    });
-  }
-
-  if (req.user.role !== "super_admin") {
-    return res.status(403).json({
-      success: false,
-      message: "Access denied. Super admin privileges required.",
-    });
-  }
-
-  next();
-};
-
 module.exports = {
-  protect,
-  authorize,
-  hasPermission,
-  requireSuperAdmin,
+  protectTenant,
+  authorizeTenant,
+  hasTenantPermission,
 };

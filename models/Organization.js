@@ -164,11 +164,7 @@ const organizationSchema = new Schema(
 
     // Settings and Configuration
     settings: {
-      // Webtoon Management
-      maxWebtoons: {
-        type: Number,
-        default: 10,
-      },
+      // Storage Settings
       maxStorage: {
         type: Number,
         default: 1024, // MB
@@ -284,10 +280,6 @@ const organizationSchema = new Schema(
         type: Number,
         default: 0,
       },
-      totalWebtoons: {
-        type: Number,
-        default: 0,
-      },
       totalRentals: {
         type: Number,
         default: 0,
@@ -303,9 +295,6 @@ const organizationSchema = new Schema(
 );
 
 // Indexes for better performance
-organizationSchema.index({ subdomain: 1 });
-organizationSchema.index({ registrationNumber: 1 });
-organizationSchema.index({ email: 1 });
 organizationSchema.index({ status: 1 });
 organizationSchema.index({ "subscription.plan": 1 });
 organizationSchema.index({ "address.coordinates": "2dsphere" });
@@ -347,9 +336,4 @@ organizationSchema.statics.isSubdomainAvailable = function (subdomain) {
   }).then((org) => !org);
 };
 
-module.exports = function (conn) {
-  if (!conn || !conn.connection) {
-    throw new Error("Database connection is required!");
-  }
-  return conn.model("Organization", organizationSchema);
-};
+module.exports = organizationSchema;

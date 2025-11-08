@@ -1,12 +1,34 @@
-const Organization = require('../models/Organization');
-const User = require('../models/User');
-const crypto = require('crypto');
+const crypto = require("crypto");
+const mongoose = require("mongoose");
+
+// Import schemas
+const organizationSchema = require("../models/Organization");
+const userSchema = require("../models/User");
+
+// Register models if not already registered
+const getOrganizationModel = () => {
+  try {
+    return mongoose.model("Organization");
+  } catch (error) {
+    return mongoose.model("Organization", organizationSchema);
+  }
+};
+
+const getUserModel = () => {
+  try {
+    return mongoose.model("User");
+  } catch (error) {
+    return mongoose.model("User", userSchema);
+  }
+};
 
 // @desc    Register new organization
 // @route   POST /api/organizations
 // @access  Public
 const registerOrganization = async (req, res) => {
   try {
+    const Organization = getOrganizationModel();
+    const User = getUserModel();
     const {
       name,
       displayName,
@@ -19,15 +41,17 @@ const registerOrganization = async (req, res) => {
       businessType,
       industry,
       address,
-      adminUser
+      adminUser,
     } = req.body;
 
     // Check if subdomain is available
-    const existingOrg = await Organization.findOne({ subdomain: subdomain.toLowerCase() });
+    const existingOrg = await Organization.findOne({
+      subdomain: subdomain.toLowerCase(),
+    });
     if (existingOrg) {
       return res.status(400).json({
         success: false,
-        message: 'Subdomain is already taken'
+        message: "Subdomain is already taken",
       });
     }
 
@@ -36,12 +60,12 @@ const registerOrganization = async (req, res) => {
     if (existingReg) {
       return res.status(400).json({
         success: false,
-        message: 'Registration number already exists'
+        message: "Registration number already exists",
       });
     }
 
     // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationToken = crypto.randomBytes(32).toString("hex");
 
     // Create organization
     const organization = await Organization.create({
@@ -58,7 +82,7 @@ const registerOrganization = async (req, res) => {
       address,
       verificationToken,
       verificationExpires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-      adminUsers: []
+      adminUsers: [],
     });
 
     // Create admin user if provided
@@ -66,22 +90,79 @@ const registerOrganization = async (req, res) => {
       const user = await User.create({
         ...adminUser,
         organization: organization._id,
-        role: 'owner',
-        permissions: ['read', 'write', 'delete', 'manage_users', 'manage_content', 'manage_settings']
+        role: "owner",
+        permissions: [
+          "read",
+          "write",
+          "delete",
+          "manage_users",
+          "manage_content",
+          "manage_settings",
+        ],
       });
 
       // Add user to organization's admin list
       organization.adminUsers.push({
         userId: user._id,
-        role: 'owner',
-        permissions: ['read', 'write', 'delete', 'manage_users', 'manage_content', 'manage_settings']
+        role: "owner",
+        permissions: [
+          "read",
+          "write",
+          "delete",
+          "manage_users",
+          "manage_content",
+          "manage_settings",
+        ],
       });
       await organization.save();
     }
 
+    // Initialize organization database
+    try {
+      const { connectOrgDB } = require("../config/multiTenantDB");
+      const { getTenantModels } = require("../models/tenant");
+
+      await connectOrgDB(organization.subdomain);
+      const { User, Rental } = getTenantModels(organization.subdomain);
+
+      // Create indexes
+      await User.createIndexes();
+      await Rental.createIndexes();
+
+      // Create login credentials in organization database
+      if (adminUser && adminUser.password) {
+        const orgUser = await User.create({
+          firstName: adminUser.firstName || "Admin",
+          lastName: adminUser.lastName || "User",
+          username: organization.registrationNumber.toLowerCase(),
+          email: adminUser.email || `${organization.subdomain}@webix.com`,
+          password: adminUser.password,
+          role: "admin",
+          status: "active",
+          isEmailVerified: true,
+        });
+
+        console.log(
+          `✅ Login credentials created for organization: ${organization.subdomain}`
+        );
+        console.log(`   Username: ${organization.registrationNumber}`);
+        console.log(`   Password: ${adminUser.password}`);
+      }
+
+      console.log(
+        `✅ Database initialized for new organization: ${organization.subdomain}`
+      );
+    } catch (dbError) {
+      console.error(
+        `❌ Error initializing database for ${organization.subdomain}:`,
+        dbError
+      );
+      // Don't fail the organization creation if DB init fails
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Organization registered successfully',
+      message: "Organization registered successfully",
       data: {
         organization: {
           id: organization._id,
@@ -90,16 +171,24 @@ const registerOrganization = async (req, res) => {
           subdomain: organization.subdomain,
           domainUrl: organization.domainUrl,
           status: organization.status,
-          isVerified: organization.isVerified
-        }
-      }
+          isVerified: organization.isVerified,
+        },
+        loginCredentials:
+          adminUser && adminUser.password
+            ? {
+                username: organization.registrationNumber,
+                password: adminUser.password,
+                loginUrl: `https://${organization.subdomain}.webix.com/api/tenant/${organization.subdomain}/auth/login`,
+              }
+            : null,
+      },
     });
   } catch (error) {
-    console.error('Organization registration error:', error);
+    console.error("Organization registration error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during organization registration',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error during organization registration",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -109,11 +198,12 @@ const registerOrganization = async (req, res) => {
 // @access  Private (Admin only)
 const getOrganizations = async (req, res) => {
   try {
+    const Organization = getOrganizationModel();
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const sort = req.query.sort || 'createdAt';
-    const order = req.query.order === 'asc' ? 1 : -1;
+    const sort = req.query.sort || "createdAt";
+    const order = req.query.order === "asc" ? 1 : -1;
     const status = req.query.status;
     const search = req.query.search;
 
@@ -122,19 +212,18 @@ const getOrganizations = async (req, res) => {
     if (status) filter.status = status;
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { displayName: { $regex: search, $options: 'i' } },
-        { subdomain: { $regex: search, $options: 'i' } },
-        { registrationNumber: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { displayName: { $regex: search, $options: "i" } },
+        { subdomain: { $regex: search, $options: "i" } },
+        { registrationNumber: { $regex: search, $options: "i" } },
       ];
     }
 
     const organizations = await Organization.find(filter)
-      .select('-verificationToken -verificationExpires -apiKeys')
+      .select("-verificationToken -verificationExpires -apiKeys")
       .sort({ [sort]: order })
       .skip(skip)
-      .limit(limit)
-      .populate('adminUsers.userId', 'firstName lastName email role');
+      .limit(limit);
 
     const total = await Organization.countDocuments(filter);
 
@@ -146,16 +235,16 @@ const getOrganizations = async (req, res) => {
           currentPage: page,
           totalPages: Math.ceil(total / limit),
           totalItems: total,
-          itemsPerPage: limit
-        }
-      }
+          itemsPerPage: limit,
+        },
+      },
     });
   } catch (error) {
-    console.error('Get organizations error:', error);
+    console.error("Get organizations error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching organizations',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while fetching organizations",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -165,27 +254,28 @@ const getOrganizations = async (req, res) => {
 // @access  Private
 const getOrganization = async (req, res) => {
   try {
-    const organization = await Organization.findById(req.params.id)
-      .select('-verificationToken -verificationExpires -apiKeys')
-      .populate('adminUsers.userId', 'firstName lastName email role');
+    const Organization = getOrganizationModel();
+    const organization = await Organization.findById(req.params.id).select(
+      "-verificationToken -verificationExpires -apiKeys"
+    );
 
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: 'Organization not found'
+        message: "Organization not found",
       });
     }
 
     res.json({
       success: true,
-      data: { organization }
+      data: { organization },
     });
   } catch (error) {
-    console.error('Get organization error:', error);
+    console.error("Get organization error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching organization',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while fetching organization",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -195,26 +285,28 @@ const getOrganization = async (req, res) => {
 // @access  Public
 const getOrganizationBySubdomain = async (req, res) => {
   try {
-    const organization = await Organization.findBySubdomain(req.params.subdomain)
-      .select('-verificationToken -verificationExpires -apiKeys');
+    const Organization = getOrganizationModel();
+    const organization = await Organization.findBySubdomain(
+      req.params.subdomain
+    ).select("-verificationToken -verificationExpires -apiKeys");
 
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: 'Organization not found'
+        message: "Organization not found",
       });
     }
 
     res.json({
       success: true,
-      data: { organization }
+      data: { organization },
     });
   } catch (error) {
-    console.error('Get organization by subdomain error:', error);
+    console.error("Get organization by subdomain error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching organization',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while fetching organization",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -224,21 +316,24 @@ const getOrganizationBySubdomain = async (req, res) => {
 // @access  Public
 const checkSubdomainAvailability = async (req, res) => {
   try {
-    const isAvailable = await Organization.isSubdomainAvailable(req.params.subdomain);
-    
+    const Organization = getOrganizationModel();
+    const isAvailable = await Organization.isSubdomainAvailable(
+      req.params.subdomain
+    );
+
     res.json({
       success: true,
       data: {
         subdomain: req.params.subdomain,
-        available: isAvailable
-      }
+        available: isAvailable,
+      },
     });
   } catch (error) {
-    console.error('Check subdomain availability error:', error);
+    console.error("Check subdomain availability error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while checking subdomain availability',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while checking subdomain availability",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -248,34 +343,37 @@ const checkSubdomainAvailability = async (req, res) => {
 // @access  Private (Organization admin/owner)
 const updateOrganization = async (req, res) => {
   try {
+    const Organization = getOrganizationModel();
     const organization = await Organization.findById(req.params.id);
 
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: 'Organization not found'
+        message: "Organization not found",
       });
     }
 
     // Check if user has permission to update
     const isAdmin = organization.adminUsers.some(
-      admin => admin.userId.toString() === req.user._id.toString()
+      (admin) => admin.userId.toString() === req.user._id.toString()
     );
 
-    if (!isAdmin && req.user.role !== 'super_admin') {
+    if (!isAdmin && req.user.role !== "super_admin") {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Admin privileges required.'
+        message: "Access denied. Admin privileges required.",
       });
     }
 
     // Check subdomain availability if changing
     if (req.body.subdomain && req.body.subdomain !== organization.subdomain) {
-      const isAvailable = await Organization.isSubdomainAvailable(req.body.subdomain);
+      const isAvailable = await Organization.isSubdomainAvailable(
+        req.body.subdomain
+      );
       if (!isAvailable) {
         return res.status(400).json({
           success: false,
-          message: 'Subdomain is already taken'
+          message: "Subdomain is already taken",
         });
       }
     }
@@ -284,19 +382,19 @@ const updateOrganization = async (req, res) => {
       req.params.id,
       req.body,
       { new: true, runValidators: true }
-    ).select('-verificationToken -verificationExpires -apiKeys');
+    ).select("-verificationToken -verificationExpires -apiKeys");
 
     res.json({
       success: true,
-      message: 'Organization updated successfully',
-      data: { organization: updatedOrganization }
+      message: "Organization updated successfully",
+      data: { organization: updatedOrganization },
     });
   } catch (error) {
-    console.error('Update organization error:', error);
+    console.error("Update organization error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while updating organization',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while updating organization",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -306,41 +404,44 @@ const updateOrganization = async (req, res) => {
 // @access  Private (Organization owner only)
 const deleteOrganization = async (req, res) => {
   try {
+    const Organization = getOrganizationModel();
     const organization = await Organization.findById(req.params.id);
 
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: 'Organization not found'
+        message: "Organization not found",
       });
     }
 
     // Check if user is owner
     const isOwner = organization.adminUsers.some(
-      admin => admin.userId.toString() === req.user._id.toString() && admin.role === 'owner'
+      (admin) =>
+        admin.userId.toString() === req.user._id.toString() &&
+        admin.role === "owner"
     );
 
-    if (!isOwner && req.user.role !== 'super_admin') {
+    if (!isOwner && req.user.role !== "super_admin") {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Owner privileges required.'
+        message: "Access denied. Owner privileges required.",
       });
     }
 
     // Soft delete - change status to deleted
-    organization.status = 'deleted';
+    organization.status = "deleted";
     await organization.save();
 
     res.json({
       success: true,
-      message: 'Organization deleted successfully'
+      message: "Organization deleted successfully",
     });
   } catch (error) {
-    console.error('Delete organization error:', error);
+    console.error("Delete organization error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while deleting organization',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while deleting organization",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -350,30 +451,31 @@ const deleteOrganization = async (req, res) => {
 // @access  Private (Admin only)
 const verifyOrganization = async (req, res) => {
   try {
+    const Organization = getOrganizationModel();
     const organization = await Organization.findById(req.params.id);
 
     if (!organization) {
       return res.status(404).json({
         success: false,
-        message: 'Organization not found'
+        message: "Organization not found",
       });
     }
 
     organization.isVerified = true;
-    organization.status = 'active';
+    organization.status = "active";
     await organization.save();
 
     res.json({
       success: true,
-      message: 'Organization verified successfully',
-      data: { organization }
+      message: "Organization verified successfully",
+      data: { organization },
     });
   } catch (error) {
-    console.error('Verify organization error:', error);
+    console.error("Verify organization error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while verifying organization',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while verifying organization",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -386,5 +488,5 @@ module.exports = {
   checkSubdomainAvailability,
   updateOrganization,
   deleteOrganization,
-  verifyOrganization
+  verifyOrganization,
 };

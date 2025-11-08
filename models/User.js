@@ -11,13 +11,13 @@ const userSchema = new Schema(
       type: String,
       required: [true, "First name is required"],
       trim: true,
-      maxlength: [50, "First name cannot exceed 50 characters"]
+      maxlength: [50, "First name cannot exceed 50 characters"],
     },
     lastName: {
       type: String,
       required: [true, "Last name is required"],
       trim: true,
-      maxlength: [50, "Last name cannot exceed 50 characters"]
+      maxlength: [50, "Last name cannot exceed 50 characters"],
     },
     email: {
       type: String,
@@ -26,176 +26,186 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           return /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(v);
         },
-        message: "Please enter a valid email address"
-      }
+        message: "Please enter a valid email address",
+      },
     },
     password: {
       type: String,
       required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters long"],
-      select: false
+      select: false,
     },
     phone: {
       type: String,
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           return /^[0-9+\-\s()]+$/.test(v);
         },
-        message: "Please enter a valid phone number"
-      }
+        message: "Please enter a valid phone number",
+      },
     },
-    
+
     // Profile Information
     avatar: {
       type: String,
-      default: null
+      default: null,
     },
     bio: {
       type: String,
-      maxlength: [500, "Bio cannot exceed 500 characters"]
+      maxlength: [500, "Bio cannot exceed 500 characters"],
     },
     dateOfBirth: Date,
     gender: {
       type: String,
       enum: ["male", "female", "other", "prefer_not_to_say"],
-      default: "prefer_not_to_say"
+      default: "prefer_not_to_say",
     },
-    
+
     // Organization Association
     organization: {
       type: Schema.Types.ObjectId,
-      ref: 'Organization',
-      required: [true, "Organization is required"]
+      ref: "Organization",
+      required: [true, "Organization is required"],
     },
     role: {
       type: String,
       enum: ["owner", "admin", "moderator", "user"],
-      default: "user"
+      default: "user",
     },
-    permissions: [{
-      type: String,
-      enum: ["read", "write", "delete", "manage_users", "manage_content", "manage_settings"]
-    }],
-    
+    permissions: [
+      {
+        type: String,
+        enum: [
+          "read",
+          "write",
+          "delete",
+          "manage_users",
+          "manage_content",
+          "manage_settings",
+        ],
+      },
+    ],
+
     // Account Status
     status: {
       type: String,
       enum: ["active", "inactive", "suspended", "pending_verification"],
-      default: "pending_verification"
+      default: "pending_verification",
     },
     isEmailVerified: {
       type: Boolean,
-      default: false
+      default: false,
     },
     emailVerificationToken: String,
     emailVerificationExpires: Date,
-    
+
     // Password Reset
     passwordResetToken: String,
     passwordResetExpires: Date,
-    
+
     // Login Information
     lastLogin: Date,
     loginAttempts: {
       type: Number,
-      default: 0
+      default: 0,
     },
     lockUntil: Date,
-    
+
     // Preferences
     preferences: {
       language: {
         type: String,
         default: "mn",
-        enum: ["mn", "en", "ko", "ja", "zh"]
+        enum: ["mn", "en", "ko", "ja", "zh"],
       },
       theme: {
         type: String,
         default: "light",
-        enum: ["light", "dark", "auto"]
+        enum: ["light", "dark", "auto"],
       },
       notifications: {
         email: {
           type: Boolean,
-          default: true
+          default: true,
         },
         push: {
           type: Boolean,
-          default: true
+          default: true,
         },
         sms: {
           type: Boolean,
-          default: false
-        }
-      }
+          default: false,
+        },
+      },
     },
-    
+
     // Rental History
-    rentalHistory: [{
-      webtoonId: {
-        type: Schema.Types.ObjectId,
-        ref: 'Webtoon'
+    rentalHistory: [
+      {
+        webtoonId: {
+          type: Schema.Types.ObjectId,
+          ref: "Webtoon",
+        },
+        rentedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        returnedAt: Date,
+        dueDate: Date,
+        status: {
+          type: String,
+          enum: ["active", "returned", "overdue", "cancelled"],
+          default: "active",
+        },
       },
-      rentedAt: {
-        type: Date,
-        default: Date.now
-      },
-      returnedAt: Date,
-      dueDate: Date,
-      status: {
-        type: String,
-        enum: ["active", "returned", "overdue", "cancelled"],
-        default: "active"
-      }
-    }],
-    
+    ],
+
     // Statistics
     stats: {
       totalRentals: {
         type: Number,
-        default: 0
+        default: 0,
       },
       activeRentals: {
         type: Number,
-        default: 0
+        default: 0,
       },
       overdueRentals: {
         type: Number,
-        default: 0
-      }
-    }
+        default: 0,
+      },
+    },
   },
   {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
   }
 );
 
 // Indexes
-userSchema.index({ email: 1 });
 userSchema.index({ organization: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ role: 1 });
 
 // Virtual for full name
-userSchema.virtual('fullName').get(function() {
+userSchema.virtual("fullName").get(function () {
   return `${this.firstName} ${this.lastName}`;
 });
 
 // Virtual for account lock status
-userSchema.virtual('isLocked').get(function() {
+userSchema.virtual("isLocked").get(function () {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 });
 
 // Pre-save middleware to hash password
-userSchema.pre('save', async function(next) {
+userSchema.pre("save", async function (next) {
   // Only hash the password if it has been modified (or is new)
-  if (!this.isModified('password')) return next();
-  
+  if (!this.isModified("password")) return next();
+
   try {
     // Hash password with cost of 12
     const salt = await bcrypt.genSalt(12);
@@ -207,51 +217,46 @@ userSchema.pre('save', async function(next) {
 });
 
 // Instance method to check password
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Instance method to increment login attempts
-userSchema.methods.incLoginAttempts = function() {
+userSchema.methods.incLoginAttempts = function () {
   // If we have a previous lock that has expired, restart at 1
   if (this.lockUntil && this.lockUntil < Date.now()) {
     return this.updateOne({
       $unset: { lockUntil: 1 },
-      $set: { loginAttempts: 1 }
+      $set: { loginAttempts: 1 },
     });
   }
-  
+
   const updates = { $inc: { loginAttempts: 1 } };
-  
+
   // Lock account after 5 failed attempts for 2 hours
   if (this.loginAttempts + 1 >= 5 && !this.isLocked) {
     updates.$set = { lockUntil: Date.now() + 2 * 60 * 60 * 1000 }; // 2 hours
   }
-  
+
   return this.updateOne(updates);
 };
 
 // Instance method to reset login attempts
-userSchema.methods.resetLoginAttempts = function() {
+userSchema.methods.resetLoginAttempts = function () {
   return this.updateOne({
-    $unset: { loginAttempts: 1, lockUntil: 1 }
+    $unset: { loginAttempts: 1, lockUntil: 1 },
   });
 };
 
 // Static method to find by email
-userSchema.statics.findByEmail = function(email) {
+userSchema.statics.findByEmail = function (email) {
   return this.findOne({ email: email.toLowerCase() });
 };
 
 // Static method to find by organization
-userSchema.statics.findByOrganization = function(organizationId) {
+userSchema.statics.findByOrganization = function (organizationId) {
   return this.find({ organization: organizationId });
 };
 
-module.exports = function(conn) {
-  if (!conn || !conn.connection) {
-    throw new Error("Database connection is required!");
-  }
-  return conn.model("User", userSchema);
-};
+module.exports = userSchema;

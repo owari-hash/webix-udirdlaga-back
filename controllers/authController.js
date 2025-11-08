@@ -1,188 +1,139 @@
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const User = require('../models/User');
-const Organization = require('../models/Organization');
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const mongoose = require("mongoose");
+
+// Import schema
+const adminSchema = require("../models/Admin");
+
+// Register model if not already registered
+const getAdmin = () => {
+  try {
+    return mongoose.model("Admin");
+  } catch (error) {
+    return mongoose.model("Admin", adminSchema);
+  }
+};
 
 // Generate JWT Token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d',
+    expiresIn: process.env.JWT_EXPIRE || "7d",
   });
 };
 
-// @desc    Register user
-// @route   POST /api/auth/register
-// @access  Public
-const register = async (req, res) => {
-  try {
-    const { firstName, lastName, email, password, phone, organizationId, role } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findByEmail(email);
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already exists with this email'
-      });
-    }
-
-    // Check if organization exists
-    const organization = await Organization.findById(organizationId);
-    if (!organization) {
-      return res.status(400).json({
-        success: false,
-        message: 'Organization not found'
-      });
-    }
-
-    // Generate verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    // Create user
-    const user = await User.create({
-      firstName,
-      lastName,
-      email,
-      password,
-      phone,
-      organization: organizationId,
-      role: role || 'user',
-      emailVerificationToken: verificationToken,
-      emailVerificationExpires: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-      status: 'pending_verification'
-    });
-
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully. Please verify your email.',
-      data: {
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          status: user.status,
-          organization: {
-            id: organization._id,
-            name: organization.name,
-            subdomain: organization.subdomain
-          }
-        },
-        token
-      }
-    });
-  } catch (error) {
-    console.error('User registration error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during user registration',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
-
-// @desc    Login user
+// @desc    Admin login
 // @route   POST /api/auth/login
 // @access  Public
-const login = async (req, res) => {
+const adminLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
+    const Admin = getAdmin();
 
-    // Check if user exists and include password
-    const user = await User.findByEmail(email).select('+password');
-    if (!user) {
+    // Check if admin exists and include password
+    let admin = await Admin.findByUsername(username).select("+password");
+
+    // If admin doesn't exist and credentials are admin/123, create it
+    if (!admin && username === "admin" && password === "123") {
+      admin = new Admin({
+        username: "admin",
+        password: "123",
+        email: "admin@webix.com",
+        role: "super_admin",
+        isActive: true,
+      });
+      await admin.save();
+      console.log("✅ Admin user created on first login");
+    }
+
+    if (!admin) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: "Invalid credentials",
       });
     }
 
     // Check if account is locked
-    if (user.isLocked) {
+    if (admin.isLocked) {
       return res.status(423).json({
         success: false,
-        message: 'Account is temporarily locked due to too many failed login attempts'
+        message:
+          "Account is temporarily locked due to too many failed login attempts",
+      });
+    }
+
+    // Check if account is active
+    if (!admin.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: "Account is not active",
       });
     }
 
     // Check if password is correct
-    const isPasswordCorrect = await user.comparePassword(password);
+    const isPasswordCorrect = await admin.comparePassword(password);
     if (!isPasswordCorrect) {
       // Increment login attempts
-      await user.incLoginAttempts();
+      await admin.incLoginAttempts();
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: "Invalid credentials",
       });
     }
 
     // Reset login attempts on successful login
-    if (user.loginAttempts > 0) {
-      await user.resetLoginAttempts();
+    if (admin.loginAttempts > 0) {
+      await admin.resetLoginAttempts();
     }
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-
-    // Get organization details
-    const organization = await Organization.findById(user.organization);
+    admin.lastLogin = new Date();
+    await admin.save();
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(admin._id);
 
     res.json({
       success: true,
-      message: 'Login successful',
+      message: "Login successful",
       data: {
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          status: user.status,
-          organization: {
-            id: organization._id,
-            name: organization.name,
-            subdomain: organization.subdomain,
-            domainUrl: organization.domainUrl
-          }
+        admin: {
+          id: admin._id,
+          username: admin.username,
+          email: admin.email,
+          role: admin.role,
+          lastLogin: admin.lastLogin,
         },
-        token
-      }
+        token,
+      },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error("Admin login error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during login',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error during login",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
 
-// @desc    Get current user
+// @desc    Get current admin
 // @route   GET /api/auth/me
 // @access  Private
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate('organization', 'name subdomain domainUrl');
-    
+    const Admin = getAdmin();
+    const admin = await Admin.findById(req.user._id);
+
     res.json({
       success: true,
-      data: { user }
+      data: { admin },
     });
   } catch (error) {
-    console.error('Get me error:', error);
+    console.error("Get me error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while fetching user data',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while fetching admin data",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -201,22 +152,22 @@ const updateProfile = async (req, res) => {
         lastName,
         phone,
         bio,
-        preferences
+        preferences,
       },
       { new: true, runValidators: true }
     );
 
     res.json({
       success: true,
-      message: 'Profile updated successfully',
-      data: { user }
+      message: "Profile updated successfully",
+      data: { user },
     });
   } catch (error) {
-    console.error('Update profile error:', error);
+    console.error("Update profile error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while updating profile',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while updating profile",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -229,14 +180,16 @@ const changePassword = async (req, res) => {
     const { currentPassword, newPassword } = req.body;
 
     // Get user with password
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user._id).select("+password");
 
     // Check current password
-    const isCurrentPasswordCorrect = await user.comparePassword(currentPassword);
+    const isCurrentPasswordCorrect = await user.comparePassword(
+      currentPassword
+    );
     if (!isCurrentPasswordCorrect) {
       return res.status(400).json({
         success: false,
-        message: 'Current password is incorrect'
+        message: "Current password is incorrect",
       });
     }
 
@@ -246,14 +199,14 @@ const changePassword = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Password changed successfully'
+      message: "Password changed successfully",
     });
   } catch (error) {
-    console.error('Change password error:', error);
+    console.error("Change password error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error while changing password',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error while changing password",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -269,12 +222,12 @@ const forgotPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found with this email'
+        message: "User not found with this email",
       });
     }
 
     // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetToken = crypto.randomBytes(32).toString("hex");
     user.passwordResetToken = resetToken;
     user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
     await user.save();
@@ -283,17 +236,18 @@ const forgotPassword = async (req, res) => {
     // For now, just return the token (in production, send via email)
     res.json({
       success: true,
-      message: 'Password reset token sent to your email',
+      message: "Password reset token sent to your email",
       data: {
-        resetToken: process.env.NODE_ENV === 'development' ? resetToken : undefined
-      }
+        resetToken:
+          process.env.NODE_ENV === "development" ? resetToken : undefined,
+      },
     });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error("Forgot password error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during forgot password',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error during forgot password",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -307,13 +261,13 @@ const resetPassword = async (req, res) => {
 
     const user = await User.findOne({
       passwordResetToken: token,
-      passwordResetExpires: { $gt: Date.now() }
+      passwordResetExpires: { $gt: Date.now() },
     });
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired reset token'
+        message: "Invalid or expired reset token",
       });
     }
 
@@ -325,14 +279,14 @@ const resetPassword = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Password reset successfully'
+      message: "Password reset successfully",
     });
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error("Reset password error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during password reset',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error during password reset",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -346,33 +300,33 @@ const verifyEmail = async (req, res) => {
 
     const user = await User.findOne({
       emailVerificationToken: token,
-      emailVerificationExpires: { $gt: Date.now() }
+      emailVerificationExpires: { $gt: Date.now() },
     });
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification token'
+        message: "Invalid or expired verification token",
       });
     }
 
     // Update user status
     user.isEmailVerified = true;
-    user.status = 'active';
+    user.status = "active";
     user.emailVerificationToken = undefined;
     user.emailVerificationExpires = undefined;
     await user.save();
 
     res.json({
       success: true,
-      message: 'Email verified successfully'
+      message: "Email verified successfully",
     });
   } catch (error) {
-    console.error('Verify email error:', error);
+    console.error("Verify email error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during email verification',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error during email verification",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -386,26 +340,20 @@ const logout = async (req, res) => {
     // by removing the token. Here we can log the logout event.
     res.json({
       success: true,
-      message: 'Logged out successfully'
+      message: "Logged out successfully",
     });
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error("Logout error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during logout',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Server error during logout",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
 
 module.exports = {
-  register,
-  login,
+  adminLogin,
   getMe,
-  updateProfile,
-  changePassword,
-  forgotPassword,
-  resetPassword,
-  verifyEmail,
-  logout
+  logout,
 };
