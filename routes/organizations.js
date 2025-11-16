@@ -10,6 +10,13 @@ const {
   deleteOrganization,
   verifyOrganization,
 } = require("../controllers/organizationController");
+const {
+  addUserToOrganization,
+  getOrganizationUsers,
+  getOrganizationUser,
+  updateOrganizationUser,
+  deleteOrganizationUser,
+} = require("../controllers/tenant/userController");
 const { protect, authorize, requireSuperAdmin } = require("../middleware/auth");
 const {
   validateOrganizationRegistration,
@@ -40,5 +47,12 @@ router.get("/:id", getOrganization);
 router.put("/:id", validateOrganizationUpdate, updateOrganization);
 router.delete("/:id", deleteOrganization);
 router.post("/:id/verify", verifyOrganization);
+
+// Organization user management routes
+router.post("/:orgId/users", addUserToOrganization);
+router.get("/:orgId/users", getOrganizationUsers);
+router.get("/:orgId/users/:userId", getOrganizationUser);
+router.put("/:orgId/users/:userId", updateOrganizationUser);
+router.delete("/:orgId/users/:userId", deleteOrganizationUser);
 
 module.exports = router;
