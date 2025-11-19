@@ -1,26 +1,7 @@
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, "../uploads/organizations");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename: timestamp-random-originalname
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, `${name}-${uniqueSuffix}${ext}`);
-  },
-});
+// Configure multer to store files in memory (for base64 conversion)
+const storage = multer.memoryStorage();
 
 // File filter - only allow images
 const fileFilter = (req, file, cb) => {
@@ -54,8 +35,24 @@ const upload = multer({
   fileFilter: fileFilter,
 });
 
-// Middleware for single logo upload
+// Middleware for single logo upload - converts to base64
 const uploadLogo = upload.single("logo");
+
+// Middleware to convert uploaded file to base64
+const convertToBase64 = (req, res, next) => {
+  if (req.file) {
+    // Convert buffer to base64
+    const base64String = req.file.buffer.toString("base64");
+    const mimeType = req.file.mimetype;
+
+    // Create data URI
+    req.body.logo = `data:${mimeType};base64,${base64String}`;
+
+    // Remove file object since we're using base64 now
+    delete req.file;
+  }
+  next();
+};
 
 // Middleware to handle upload errors
 const handleUploadError = (err, req, res, next) => {
@@ -82,6 +79,6 @@ const handleUploadError = (err, req, res, next) => {
 
 module.exports = {
   uploadLogo,
+  convertToBase64,
   handleUploadError,
 };
-

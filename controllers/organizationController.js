@@ -67,13 +67,10 @@ const registerOrganization = async (req, res) => {
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString("hex");
 
-    // Handle logo upload if provided
+    // Handle logo - can be base64 data URI or URL
     let logoPath = null;
-    if (req.file) {
-      // Logo path relative to uploads directory
-      logoPath = `/uploads/organizations/${req.file.filename}`;
-    } else if (req.body.logo) {
-      // If logo is provided as URL/base64 in body
+    if (req.body.logo) {
+      // Logo can be base64 data URI or URL
       logoPath = req.body.logo;
     }
 
@@ -391,15 +388,13 @@ const updateOrganization = async (req, res) => {
       }
     }
 
-    // Handle logo upload if provided
+    // Handle logo - can be base64 data URI, URL, or null to remove
     const updateData = { ...req.body };
-    if (req.file) {
-      // Logo path relative to uploads directory
-      updateData.logo = `/uploads/organizations/${req.file.filename}`;
-    } else if (req.body.logo === null || req.body.logo === "") {
+    if (req.body.logo === null || req.body.logo === "") {
       // Allow removing logo by setting to null
       updateData.logo = null;
     }
+    // If logo is provided (base64 or URL), it's already in req.body.logo
 
     const updatedOrganization = await Organization.findByIdAndUpdate(
       req.params.id,

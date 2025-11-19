@@ -24,7 +24,7 @@ const {
   validateSubdomain,
   validatePagination,
 } = require("../middleware/validation");
-const { uploadLogo, handleUploadError } = require("../middleware/upload");
+const { uploadLogo, convertToBase64, handleUploadError } = require("../middleware/upload");
 
 // Public routes
 router.get(
@@ -45,6 +45,7 @@ router.use(protect); // All routes below require authentication
 router.post(
   "/",
   uploadLogo,
+  convertToBase64,
   handleUploadError,
   validateOrganizationRegistration,
   registerOrganization
@@ -54,6 +55,7 @@ router.get("/:id", getOrganization);
 router.put(
   "/:id",
   uploadLogo,
+  convertToBase64,
   handleUploadError,
   validateOrganizationUpdate,
   updateOrganization
