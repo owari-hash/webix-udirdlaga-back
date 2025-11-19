@@ -220,30 +220,46 @@ const validateOrganizationUpdate = [
 
   body("email")
     .optional()
-    .isArray()
     .custom((emails) => {
       if (emails) {
-        emails.forEach((email) => {
+        // Convert string to array if needed
+        const emailArray = Array.isArray(emails) ? emails : [emails];
+        emailArray.forEach((email) => {
           if (!/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(email)) {
             throw new Error("Please provide valid email addresses");
           }
         });
       }
       return true;
+    })
+    .customSanitizer((emails) => {
+      // Convert string to array for consistency
+      if (emails && !Array.isArray(emails)) {
+        return [emails];
+      }
+      return emails;
     }),
 
   body("phone")
     .optional()
-    .isArray()
     .custom((phones) => {
       if (phones) {
-        phones.forEach((phone) => {
+        // Convert string to array if needed
+        const phoneArray = Array.isArray(phones) ? phones : [phones];
+        phoneArray.forEach((phone) => {
           if (!/^[0-9+\-\s()]+$/.test(phone)) {
             throw new Error("Please provide valid phone numbers");
           }
         });
       }
       return true;
+    })
+    .customSanitizer((phones) => {
+      // Convert string to array for consistency
+      if (phones && !Array.isArray(phones)) {
+        return [phones];
+      }
+      return phones;
     }),
 
   body("businessType")
