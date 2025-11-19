@@ -24,7 +24,11 @@ const {
   validateSubdomain,
   validatePagination,
 } = require("../middleware/validation");
-const { uploadLogo, convertToBase64, handleUploadError } = require("../middleware/upload");
+const {
+  uploadLogo,
+  convertToBase64,
+  handleUploadError,
+} = require("../middleware/upload");
 
 // Public routes
 router.get(
