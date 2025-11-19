@@ -24,6 +24,7 @@ const {
   validateSubdomain,
   validatePagination,
 } = require("../middleware/validation");
+const { uploadLogo, handleUploadError } = require("../middleware/upload");
 
 // Public routes
 router.get(
@@ -41,10 +42,22 @@ router.get(
 router.use(protect); // All routes below require authentication
 
 // Admin only routes
-router.post("/", validateOrganizationRegistration, registerOrganization);
+router.post(
+  "/",
+  uploadLogo,
+  handleUploadError,
+  validateOrganizationRegistration,
+  registerOrganization
+);
 router.get("/", validatePagination, getOrganizations);
 router.get("/:id", getOrganization);
-router.put("/:id", validateOrganizationUpdate, updateOrganization);
+router.put(
+  "/:id",
+  uploadLogo,
+  handleUploadError,
+  validateOrganizationUpdate,
+  updateOrganization
+);
 router.delete("/:id", deleteOrganization);
 router.post("/:id/verify", verifyOrganization);
 

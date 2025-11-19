@@ -23,6 +23,24 @@ const organizationSchema = new Schema(
       trim: true,
       maxlength: [500, "Description cannot exceed 500 characters"],
     },
+    logo: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator: function (v) {
+          // Allow null/undefined, relative paths, or full URLs
+          if (!v) return true;
+          return (
+            v.startsWith("/") ||
+            v.startsWith("http://") ||
+            v.startsWith("https://") ||
+            v.startsWith("data:")
+          );
+        },
+        message: "Logo must be a valid file path or URL",
+      },
+    },
 
     // Contact Information
     email: [
@@ -305,6 +323,20 @@ organizationSchema.virtual("domainUrl").get(function () {
     return `https://${this.customDomain}`;
   }
   return `https://${this.subdomain}.webix.com`;
+});
+
+// Virtual for full logo URL
+organizationSchema.virtual("logoUrl").get(function () {
+  if (!this.logo) return null;
+  
+  // If it's already a full URL, return as is
+  if (this.logo.startsWith("http://") || this.logo.startsWith("https://") || this.logo.startsWith("data:")) {
+    return this.logo;
+  }
+  
+  // If it's a relative path, construct full URL
+  const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+  return `${baseUrl}${this.logo}`;
 });
 
 // Pre-save middleware

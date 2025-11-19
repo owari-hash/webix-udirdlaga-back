@@ -67,11 +67,22 @@ const registerOrganization = async (req, res) => {
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString("hex");
 
+    // Handle logo upload if provided
+    let logoPath = null;
+    if (req.file) {
+      // Logo path relative to uploads directory
+      logoPath = `/uploads/organizations/${req.file.filename}`;
+    } else if (req.body.logo) {
+      // If logo is provided as URL/base64 in body
+      logoPath = req.body.logo;
+    }
+
     // Create organization
     const organization = await Organization.create({
       name,
       displayName,
       description,
+      logo: logoPath,
       email,
       phone,
       registrationNumber,
@@ -168,6 +179,8 @@ const registerOrganization = async (req, res) => {
           id: organization._id,
           name: organization.name,
           displayName: organization.displayName,
+          description: organization.description,
+          logo: organization.logo,
           subdomain: organization.subdomain,
           domainUrl: organization.domainUrl,
           status: organization.status,
@@ -378,9 +391,19 @@ const updateOrganization = async (req, res) => {
       }
     }
 
+    // Handle logo upload if provided
+    const updateData = { ...req.body };
+    if (req.file) {
+      // Logo path relative to uploads directory
+      updateData.logo = `/uploads/organizations/${req.file.filename}`;
+    } else if (req.body.logo === null || req.body.logo === "") {
+      // Allow removing logo by setting to null
+      updateData.logo = null;
+    }
+
     const updatedOrganization = await Organization.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     ).select("-verificationToken -verificationExpires -apiKeys");
 

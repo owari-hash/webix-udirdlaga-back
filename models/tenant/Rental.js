@@ -138,3 +138,4 @@ rentalSchema.statics.findByWebtoon = function (webtoonId) {
 module.exports = rentalSchema;
 
 
+
