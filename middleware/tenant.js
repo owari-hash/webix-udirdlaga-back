@@ -32,12 +32,45 @@ const tenantMiddleware = async (req, res, next) => {
       });
     }
 
+    // Find organization to check license
+    // We need to use the default connection to find the organization
+    const Organization = require("../models/Organization");
+    const organization = await Organization.findBySubdomain(subdomain);
+
+    if (!organization) {
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
+    }
+
+    // Check license status
+    const isLicenseActive =
+      organization.subscription &&
+      organization.subscription.status === "active" &&
+      (!organization.subscription.endDate ||
+        new Date(organization.subscription.endDate) > new Date());
+
+    if (!isLicenseActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Organization license is expired or inactive",
+        code: "LICENSE_EXPIRED",
+        organization: {
+          name: organization.name,
+          displayName: organization.displayName,
+          contactEmail: organization.email[0],
+        },
+      });
+    }
+
     // Connect to organization database
     await connectOrgDB(subdomain);
 
     // Get tenant models and attach to request
     req.tenantModels = getTenantModels(subdomain);
     req.subdomain = subdomain;
+    req.organization = organization; // Attach organization to request for further use
 
     next();
   } catch (error) {
