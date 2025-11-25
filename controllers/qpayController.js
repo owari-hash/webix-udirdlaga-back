@@ -35,7 +35,7 @@ const setQPaySettings = async (req, res) => {
     }
 
     // Check if user has permission
-    const isAdmin = organization.adminUsers.some(
+    const isAdmin = organization.adminUsers && organization.adminUsers.some(
       (admin) => admin.userId.toString() === req.user._id.toString()
     );
 
@@ -110,7 +110,7 @@ const registerQPayMerchant = async (req, res) => {
     }
 
     // Check if user has permission
-    const isAdmin = organization.adminUsers.some(
+    const isAdmin = organization.adminUsers && organization.adminUsers.some(
       (admin) => admin.userId.toString() === req.user._id.toString()
     );
 
@@ -162,20 +162,20 @@ const registerQPayMerchant = async (req, res) => {
       });
     }
 
-    // Use terminal_id from request, saved settings, or require it
+    // Use terminal_id from request, saved settings, or use default from env
+    // QPay automatically assigns a default terminal, but we still need a terminal_id for API calls
+    // If not provided, we can use a default or let QPay handle it
     const qpayTerminalId =
       terminal_id ||
       (organization.qpay &&
         organization.qpay.credentials &&
-        organization.qpay.credentials.terminal_id);
+        organization.qpay.credentials.terminal_id) ||
+      process.env.QPAY_DEFAULT_TERMINAL_ID ||
+      null;
 
-    if (!qpayTerminalId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "terminal_id is required. Provide it in the request or set QPay settings first using PUT /api/organizations/:orgId/qpay/settings",
-      });
-    }
+    // Note: terminal_id might be optional if QPay auto-assigns, but API still requires it
+    // For now, we'll allow it to be null and let QPay API handle the error if needed
+    // If QPay truly auto-assigns, the API should work without it
 
     if (!merchant_type || !["company", "person"].includes(merchant_type)) {
       return res.status(400).json({
@@ -230,6 +230,15 @@ const registerQPayMerchant = async (req, res) => {
     // Step 1: Get QPay token
     let tokenData;
     try {
+      // If terminal_id is not provided, QPay should auto-assign, but API might still require it
+      // Try with the terminal_id if available, otherwise let QPay API handle it
+      if (!qpayTerminalId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "terminal_id is required for initial registration. QPay will auto-assign a default terminal after account creation. Please provide terminal_id in the request or set it via PUT /api/organizations/:orgId/qpay/settings",
+        });
+      }
       tokenData = await getToken(qpayUsername, qpayPassword, qpayTerminalId);
     } catch (error) {
       return res.status(400).json({
@@ -378,7 +387,7 @@ const deleteQPayMerchant = async (req, res) => {
     }
 
     // Check if user has permission
-    const isAdmin = organization.adminUsers.some(
+    const isAdmin = organization.adminUsers && organization.adminUsers.some(
       (admin) => admin.userId.toString() === req.user._id.toString()
     );
 
@@ -467,7 +476,7 @@ const getQPaySettings = async (req, res) => {
   try {
     const Organization = getOrganizationModel();
     const organization = await Organization.findById(req.params.orgId).select(
-      "qpay name"
+      "qpay name adminUsers"
     );
 
     if (!organization) {
@@ -478,7 +487,7 @@ const getQPaySettings = async (req, res) => {
     }
 
     // Check if user has permission
-    const isAdmin = organization.adminUsers.some(
+    const isAdmin = organization.adminUsers && organization.adminUsers.some(
       (admin) => admin.userId.toString() === req.user._id.toString()
     );
 
@@ -527,7 +536,7 @@ const getQPayMerchant = async (req, res) => {
   try {
     const Organization = getOrganizationModel();
     const organization = await Organization.findById(req.params.orgId).select(
-      "qpay name"
+      "qpay name adminUsers"
     );
 
     if (!organization) {
@@ -538,7 +547,7 @@ const getQPayMerchant = async (req, res) => {
     }
 
     // Check if user has permission
-    const isAdmin = organization.adminUsers.some(
+    const isAdmin = organization.adminUsers && organization.adminUsers.some(
       (admin) => admin.userId.toString() === req.user._id.toString()
     );
 
