@@ -304,6 +304,62 @@ const organizationSchema = new Schema(
       },
       lastActivity: Date,
     },
+
+    // QPay Integration
+    qpay: {
+      // QPay Credentials
+      credentials: {
+        username: {
+          type: String,
+          trim: true,
+        },
+        password: {
+          type: String,
+          trim: true,
+        },
+        terminal_id: {
+          type: String,
+          trim: true,
+        },
+      },
+      // QPay Token
+      token: {
+        access_token: {
+          type: String,
+          trim: true,
+        },
+        refresh_token: {
+          type: String,
+          trim: true,
+        },
+        expires_at: {
+          type: Date,
+        },
+      },
+      // QPay Merchant (Khariltsagch)
+      khariltsagch: {
+        merchant_id: {
+          type: String,
+          trim: true,
+        },
+        merchant_type: {
+          type: String,
+          enum: ["company", "person", null],
+          default: null,
+        },
+        register_number: {
+          type: String,
+          trim: true,
+        },
+        name: {
+          type: String,
+          trim: true,
+        },
+        created_at: {
+          type: Date,
+        },
+      },
+    },
   },
   {
     timestamps: true,
@@ -328,12 +384,16 @@ organizationSchema.virtual("domainUrl").get(function () {
 // Virtual for full logo URL
 organizationSchema.virtual("logoUrl").get(function () {
   if (!this.logo) return null;
-  
+
   // If it's already a full URL, return as is
-  if (this.logo.startsWith("http://") || this.logo.startsWith("https://") || this.logo.startsWith("data:")) {
+  if (
+    this.logo.startsWith("http://") ||
+    this.logo.startsWith("https://") ||
+    this.logo.startsWith("data:")
+  ) {
     return this.logo;
   }
-  
+
   // If it's a relative path, construct full URL
   const baseUrl = process.env.BASE_URL || "http://localhost:3000";
   return `${baseUrl}${this.logo}`;

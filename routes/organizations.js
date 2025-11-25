@@ -17,6 +17,13 @@ const {
   updateOrganizationUser,
   deleteOrganizationUser,
 } = require("../controllers/tenant/userController");
+const {
+  setQPaySettings,
+  getQPaySettings,
+  registerQPayMerchant,
+  deleteQPayMerchant,
+  getQPayMerchant,
+} = require("../controllers/qpayController");
 const { protect, authorize, requireSuperAdmin } = require("../middleware/auth");
 const {
   validateOrganizationRegistration,
@@ -66,6 +73,13 @@ router.put(
 );
 router.delete("/:id", deleteOrganization);
 router.post("/:id/verify", verifyOrganization);
+
+// QPay routes
+router.put("/:orgId/qpay/settings", setQPaySettings);
+router.get("/:orgId/qpay/settings", getQPaySettings);
+router.post("/:orgId/qpay/register", registerQPayMerchant);
+router.get("/:orgId/qpay/merchant", getQPayMerchant);
+router.delete("/:orgId/qpay/merchant", deleteQPayMerchant);
 
 // Organization user management routes
 router.post("/:orgId/users", addUserToOrganization);
