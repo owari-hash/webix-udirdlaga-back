@@ -5,6 +5,7 @@ const router = express.Router();
 const authRoutes = require("./auth");
 const organizationRoutes = require("./organizations");
 const tenantRoutes = require("./tenant");
+const dashboardRoutes = require("./dashboard");
 
 // Health check endpoint
 router.get("/health", (req, res) => {
@@ -20,6 +21,7 @@ router.get("/health", (req, res) => {
 router.use("/auth", authRoutes);
 router.use("/organizations", organizationRoutes);
 router.use("/tenant", tenantRoutes);
+router.use("/dashboard", dashboardRoutes);
 
 // 404 handler for API routes
 router.use("*", (req, res) => {
