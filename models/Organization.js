@@ -359,6 +359,27 @@ const organizationSchema = new Schema(
           type: Date,
         },
       },
+      // Bank Account Information for QPay
+      bank_accounts: [
+        {
+          account_bank_code: {
+            type: String,
+            trim: true,
+          },
+          account_number: {
+            type: String,
+            trim: true,
+          },
+          account_name: {
+            type: String,
+            trim: true,
+          },
+          is_default: {
+            type: Boolean,
+            default: false,
+          },
+        },
+      ],
     },
   },
   {

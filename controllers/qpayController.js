@@ -147,6 +147,8 @@ const registerQPayMerchant = async (req, res) => {
       last_name,
       business_name,
       business_name_eng,
+      // Bank account information
+      bank_accounts,
     } = req.body;
 
     // Use global QPay credentials from env if not provided
@@ -340,6 +342,16 @@ const registerQPayMerchant = async (req, res) => {
       name: merchantResponse.name || name || company_name,
       created_at: new Date(),
     };
+
+    // Save bank account information if provided
+    if (bank_accounts && Array.isArray(bank_accounts) && bank_accounts.length > 0) {
+      organization.qpay.bank_accounts = bank_accounts.map((account) => ({
+        account_bank_code: account.account_bank_code,
+        account_number: account.account_number,
+        account_name: account.account_name,
+        is_default: account.is_default !== undefined ? account.is_default : false,
+      }));
+    }
 
     await organization.save();
 
