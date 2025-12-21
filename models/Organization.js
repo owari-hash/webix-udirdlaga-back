@@ -166,8 +166,8 @@ const organizationSchema = new Schema(
       },
       status: {
         type: String,
-        enum: ["active", "inactive", "suspended", "cancelled"],
-        default: "active",
+        enum: ["pending", "active", "inactive", "suspended", "cancelled"],
+        default: "pending",
       },
       startDate: {
         type: Date,

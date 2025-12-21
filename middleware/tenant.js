@@ -52,6 +52,15 @@ const tenantMiddleware = async (req, res, next) => {
         new Date(organization.subscription.endDate) > new Date());
 
     if (!isLicenseActive) {
+      // Update subscription status to inactive if license expired
+      const isExpired = organization.subscription?.endDate && 
+        new Date(organization.subscription.endDate) <= new Date();
+      
+      if (isExpired && organization.subscription?.status !== "inactive") {
+        organization.subscription.status = "inactive";
+        await organization.save();
+      }
+
       return res.status(403).json({
         success: false,
         message: "Organization license is expired or inactive",

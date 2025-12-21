@@ -492,6 +492,21 @@ const verifyOrganization = async (req, res) => {
 
     organization.isVerified = true;
     organization.status = "active";
+    // If subscription status is pending, activate it when verifying
+    if (
+      organization.subscription &&
+      organization.subscription.status === "pending"
+    ) {
+      organization.subscription.status = "active";
+      if (!organization.subscription.startDate) {
+        organization.subscription.startDate = new Date();
+      }
+      if (!organization.subscription.endDate) {
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 30); // 30 days from now
+        organization.subscription.endDate = endDate;
+      }
+    }
     await organization.save();
 
     res.json({
