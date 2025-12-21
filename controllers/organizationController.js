@@ -30,33 +30,8 @@ const registerOrganization = async (req, res) => {
     const Organization = getOrganizationModel();
     const User = getUserModel();
 
-    // Parse email and phone if they're JSON strings (from FormData)
-    let email = req.body.email;
-    let phone = req.body.phone;
-
-    if (typeof email === "string") {
-      try {
-        email = JSON.parse(email);
-      } catch (e) {
-        // If parsing fails, treat as single email in array
-        email = [email];
-      }
-    }
-
-    if (typeof phone === "string") {
-      try {
-        phone = JSON.parse(phone);
-      } catch (e) {
-        // If parsing fails, treat as single phone in array
-        phone = [phone];
-      }
-    }
-
-    // Ensure they are arrays
-    if (!Array.isArray(email)) email = [email];
-    if (!Array.isArray(phone)) phone = phone ? [phone] : [];
-
     // Parse address if it's a JSON string (from FormData)
+    // Email and phone are already parsed by validation middleware
     let address = req.body.address;
     if (typeof address === "string") {
       try {
@@ -70,6 +45,8 @@ const registerOrganization = async (req, res) => {
       name,
       displayName,
       description,
+      email,
+      phone,
       registrationNumber,
       subdomain,
       customDomain,

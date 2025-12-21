@@ -34,6 +34,20 @@ const validateOrganizationRegistration = [
     .withMessage("Display name must be between 2 and 100 characters"),
 
   body("email")
+    .customSanitizer((email) => {
+      // Parse JSON string if it's a string (from FormData)
+      if (typeof email === "string") {
+        try {
+          const parsed = JSON.parse(email);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          // If parsing fails, treat as single email in array
+          return [email];
+        }
+      }
+      // If already an array, return as is
+      return Array.isArray(email) ? email : [email];
+    })
     .isArray({ min: 1 })
     .withMessage("At least one email is required")
     .custom((emails) => {
@@ -46,10 +60,25 @@ const validateOrganizationRegistration = [
     }),
 
   body("phone")
+    .customSanitizer((phone) => {
+      // Parse JSON string if it's a string (from FormData)
+      if (typeof phone === "string") {
+        try {
+          const parsed = JSON.parse(phone);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          // If parsing fails, treat as single phone in array
+          return phone ? [phone] : [];
+        }
+      }
+      // If already an array, return as is
+      if (!phone) return [];
+      return Array.isArray(phone) ? phone : [phone];
+    })
     .optional()
     .isArray()
     .custom((phones) => {
-      if (phones) {
+      if (phones && phones.length > 0) {
         phones.forEach((phone) => {
           if (!/^[0-9+\-\s()]+$/.test(phone)) {
             throw new Error("Please provide valid phone numbers");
